@@ -1,0 +1,67 @@
+name: Download Dukascopy Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      instruments:
+        description: "نمادها با کاما جدا شوند (مثال: eurusd,xauusd)"
+        required: true
+        default: "eurusd"
+      from:
+        description: "تاریخ شروع (YYYY-MM-DD)"
+        required: true
+        default: "2026-09-01"
+      to:
+        description: "تاریخ پایان (YYYY-MM-DD)"
+        required: true
+        default: "2026-09-02"
+      timeframe:
+        description: "تایم‌فریم"
+        required: true
+        default: "tick"
+        type: choice
+        options: [tick, s1, m1, m30, h1, d1, mn1]
+      format:
+        description: "فرمت خروجی"
+        required: true
+        default: "csv"
+        type: choice
+        options: [csv, json]
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci || npm install
+
+      - name: Download tick data
+        env:
+          INSTRUMENTS: ${{ inputs.instruments }}
+          FROM: ${{ inputs.from }}
+          TO: ${{ inputs.to }}
+          TIMEFRAME: ${{ inputs.timeframe }}
+          FORMAT: ${{ inputs.format }}
+          OUT_DIR: data
+        run: npm run download
+
+      - name: Compress output
+        run: |
+          cd data
+          for f in *; do gzip -9 "$f"; done
+          ls -lh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dukascopy-${{ inputs.timeframe }}-${{ inputs.from }}_${{ inputs.to }}
+          path: data/*
+          retention-days: 30
+          compression-level: 0
