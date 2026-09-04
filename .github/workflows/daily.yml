@@ -1,0 +1,41 @@
+name: Daily Dukascopy Sync
+
+on:
+  schedule:
+    - cron: "30 2 * * 2-6"   # سه‌شنبه تا شنبه، ۰۲:۳۰ UTC (بعد از بسته شدن روز معاملاتی)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci || npm install
+
+      - name: Download yesterday's ticks
+        env:
+          TIMEFRAME: tick
+          FORMAT: csv
+          OUT_DIR: data
+        run: npm run download
+
+      - name: Compress
+        run: cd data && for f in *.csv; do gzip -9 "$f"; done
+
+      - name: Publish to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ticks-${{ github.run_number }}
+          name: Tick data ${{ github.run_number }}
+          files: data/*.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
